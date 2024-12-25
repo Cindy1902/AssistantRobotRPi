@@ -8,7 +8,7 @@ from adafruit_ads1x15.analog_in import AnalogIn
 
 i2c = busio.I2C(board.SCL, board.SDA)
 ads = ADS.ADS1115(i2c)
-ads.gain = 1
+# ads.gain = 1
 SAMPLE_RATE = 8000
 RECORD_SECONDS = 10
 OUTPUT_FILE = "recorded_audio.wav"
@@ -42,4 +42,15 @@ def save_to_wav(file_name, data, sample_rate):
     with wave.open(file_name, "w") as wf:
         wf.setnchannels(1)  # 1 for mono, 2 for stereo
         wf.setsampwidth(2)  # 16-bits
-        wf.setframerate(sample_rate)
+        wf.setframerate(sample_rate)  # Tan so mau
+        wf.writeframes(audio_data.tobytes())
+    print(f"Da luu file WAV: {file_name}")
+
+
+if __name__ == "__main__":
+    print(f"Ghi am trong {RECORD_SECONDS} giay...")
+    adc_data = read_microphone(channel=0, duration=RECORD_SECONDS)
+    print(f"Da doc {len(adc_data)} mau.")
+
+    save_to_wav(OUTPUT_FILE, adc_data, SAMPLE_RATE)
+    print("Hoan tat. Kiem tra file am thanh dau ra.")
