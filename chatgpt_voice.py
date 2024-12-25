@@ -3,84 +3,90 @@ import openai
 import time
 from dotenv import load_dotenv
 import speech_recognition as sr
-import pyttsx3
+import subprocess
 import numpy as np
 from gtts import gTTS
 
-mytext = "Hello"
-language = "en"
-openai.api_key = ""
+# Load API Key và cấu hình
 load_dotenv()
+openai.api_key = "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"
 model = "gpt-4"
 
-# Khoi tao phuong thuc "nhan dien giong noi" va "chuyen van ban thanh giong noi"
+# Khởi tạo nhận diện giọng nói và chuyển văn bản thành giọng nói
 r = sr.Recognizer()
-engine = pyttsx3.init("dummy")
-voice = engine.getProperty("voices")[1]
-engine.setProperty("voice", voice.id)
+
+# Cấu hình trợ lý ảo
 name = "Cindy"
-greetings = [f"whats up {name}",
-             "yeah?",
-             "well, hello there, how's it going today?"]
+greetings = [f"What's up {name}", "Yeah?", "Hello there, how's it going today?"]
+wake_word = "hey"
+language = "en"
 
+# Hàm phát âm thanh
+def play_audio(file_path):
+    try:
+        # Sử dụng omxplayer để phát âm thanh
+        subprocess.run(["omxplayer", file_path], check=True)
+    except Exception as e:
+        print(f"Error playing audio: {e}")
 
-def listen_for_wake_word(source):
-    print("Listening for 'Hey'...")
+# Hàm lắng nghe từ wake word
+def listen_for_wake_word():
+    print(f"Listening for wake word '{wake_word}'...")
+    with sr.Microphone() as source:
+        r.adjust_for_ambient_noise(source)  # Loại bỏ tiếng ồn môi trường
+        while True:
+            try:
+                audio = r.listen(source)
+                text = r.recognize_google(audio).lower()
+                if wake_word in text:
+                    print("Wake word detected.")
+                    play_greeting()
+                    listen_and_respond()
+            except sr.UnknownValueError:
+                pass  # Không phát hiện từ khóa, tiếp tục lắng nghe
+            except Exception as e:
+                print(f"Error: {e}")
+                time.sleep(1)
 
-    while True:
-        audio = r.listen(source)
+# Phát lời chào ngẫu nhiên
+def play_greeting():
+    greeting = np.random.choice(greetings)
+    print(f"Assistant: {greeting}")
+    tts = gTTS(text=greeting, lang=language)
+    tts.save("greeting.mp3")
+    play_audio("greeting.mp3")
+
+# Lắng nghe và phản hồi
+def listen_and_respond():
+    print("Listening for command...")
+    with sr.Microphone() as source:
+        r.adjust_for_ambient_noise(source)
         try:
-            text = r.recognize_google(audio)
-            if "hey" in text.lower():
-                print("Wake word detected.")
-                engine.say(np.random.choice(greetings))
-                engine.runAndWait()
-                listen_and_respond(source)
-                break
-        except sr.UnknownValueError:
-            pass
-
-# Lang nghe cau lenh va phan hoi bang OpenAI
-
-
-def listen_and_respond(source):
-    print("Listening...")
-    while True:
-        audio = r.listen(source)
-        try:
+            audio = r.listen(source, timeout=10)  # Giới hạn thời gian lắng nghe
             text = r.recognize_google(audio)
             print(f"You said: {text}")
-            if not text:
-                continue
-            # Gui cau lenh den OpenAI thong qua API
-            response = openai.ChatCompletion.create(
-                model="gpt-4", messages=[{"role": "user", "content": f"{text}"}])
-            response_text = response.choices[0].message.content
-            print(response_text)
-            print("generating audio")
-            myobj = gTTS(text=response_text, lang=language, slow=False)
-            myobj.save("response.mp3")
-            print("speaking")
-            os.system("vlc response.mp3")
-            # Speak the response
-            print("speaking")
-            engine.say(response_text)
-            engine.runAndWait()
-            if not audio:
-                listen_for_wake_word(source)
+            if text:
+                # Gửi yêu cầu tới OpenAI
+                response = openai.ChatCompletion.create(
+                    model=model, messages=[{"role": "user", "content": text}]
+                )
+                response_text = response.choices[0].message.content.strip()
+                print(f"Assistant: {response_text}")
+
+                # Phát âm thanh bằng gTTS
+                tts = gTTS(text=response_text, lang=language)
+                tts.save("response.mp3")
+                play_audio("response.mp3")
         except sr.UnknownValueError:
-            time.sleep(2)
-            print("Silence found, shutting up, listening...")
-            listen_for_wake_word(source)
-            break
+            print("Sorry, I couldn't understand.")
         except sr.RequestError as e:
             print(f"Could not request results; {e}")
-            engine.say(f"Could not request results; {e}")
-            engine.runAndWait()
-            listen_for_wake_word(source)
-            break
+        except Exception as e:
+            print(f"Error: {e}")
 
 
-# Su dung microphone mac dinh lam dau vao am thanh
-with sr.Microphone() as source:
-    listen_for_wake_word(source)
+if __name__ == "__main__":
+    try:
+        listen_for_wake_word()
+    except KeyboardInterrupt:
+        print("\nExiting programs.")
