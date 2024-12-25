@@ -1,2 +1,3 @@
-__pycache__
-faceData
+__pycache__/
+faceData/
+*.jpg
