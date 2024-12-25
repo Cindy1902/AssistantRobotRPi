@@ -79,14 +79,13 @@ class FaceTrainingSystem:
                                       (right, bottom), (0, 255, 0), 2)
 
                     cv2.imshow("Training", frame)
-                    if cv2.waitKey(1) == ord("c"):
+                    if cv2.waitKey() == ord("c"):
                         img_path = os.path.join(person_dir, f"{i+1}.jpg")
                         cv2.imwrite(img_path, frame)
                         images.append(frame)
                         print(f"Captured {angle}")
                         break
                     elif cv2.waitKey(1) == ord("q"):
-                        cv2.destroyAllWindows()
                         return False
 
         new_encodings = []
@@ -112,7 +111,8 @@ class FaceTrainingSystem:
 
         face_locations = face_recognition.face_locations(rgb_small_frame)
         face_encodings = face_recognition.face_encodings(
-            rgb_small_frame, face_locations)
+            rgb_small_frame, face_locations
+        )
 
         face_names = []
         unknown_faces = []
@@ -126,7 +126,7 @@ class FaceTrainingSystem:
                     name = self.known_face_names[first_match_index]
                 else:
                     name = "Unknown"
-                    unknown_faces.append((top*4, right*4, bottom*4, left*4))
+                    unknown_faces.append(top*4, right*4, bottom*4, left*4)
             else:
                 name = "Unknown"
                 unknown_faces.append((top*4, right*4, bottom*4, left*4))
@@ -148,23 +148,25 @@ class FaceTrainingSystem:
         capture_thread.start()
 
         while True:
-            if not self.frame_queue.empty():
-                frame = self.frame_queue.get()
+            ret, frame = self.cap.read()
+            if not ret:
+                print("Failed to capture frame")
+                continue
 
-                if self.current_mode == "recognition":
-                    frame, unknown_faces = self.recognize_faces(frame)
+            if self.current_mode == "recognition":
+                frame, unknown_faces = self.recognize_faces(frame)
 
-                    if unknown_faces:
-                        cv2.imshow("Face Recognition", frame)
-                        if cv2.waitKey(1) == ord("t"):
-                            self.current_mode = "training"
-                            cv2.destroyAllWindows()
-                            self.train_new_face()
-                            self.current_mode = "recognition"
-                    else:
-                        cv2.imshow("Face Recognition", frame)
-                        if cv2.waitKey(1) & 0xFF == ord("q"):
-                            break
+                if unknown_faces:
+                    cv2.imshow("Face Recognition", frame)
+                    if cv2.waitKey(1) == ord("t"):
+                        self.current_mode = "training"
+                        cv2.destroyAllWindows()
+                        self.train_new_face()
+                        self.current_mode = "recognition"
+                else:
+                    cv2.imshow("Face Recognition", frame)
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        return False
 
             time.sleep(0.01)
 
