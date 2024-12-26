@@ -1,5 +1,7 @@
 import os
-import openai
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 from dotenv import load_dotenv
 import time
 import speech_recognition as sr
@@ -15,7 +17,6 @@ language = 'vi-VN'
 # import matplotlib.pyplot as plt
 # ^ matplotlib is great for visualising data and for testing purposes but usually not needed for production
 load_dotenv()
-openai.api_key=os.getenv("OPENAI_KEY")
 model = 'gpt-4'
 # Set up the speech recognition and text-to-speech engines
 r = sr.Recognizer()
@@ -58,7 +59,7 @@ def listen_and_respond(source):
                 continue
 
             # Send input to OpenAI API
-            response = openai.ChatCompletion.create(model=model, messages=[{"role": "user", "content": f"{text}"}])
+            response = client.chat.completions.create(model=model, messages=[{"role": "user", "content": f"{text}"}])
             response_text = response.choices[0].message.content
             print(response_text)
             #myobj = gTTS(text = response_text, lang = language, slow = False)

@@ -1,33 +1,47 @@
 import speech_recognition as sr
 import pyttsx3
-import openai
+from openai import OpenAI
 from dotenv import load_dotenv
 import os
 
-#Initializing pyttsx3
 load_dotenv()
+API_KEY = os.getenv("OPENAI_KEY")
+
+if not API_KEY:
+    raise ValueError("API Key not found. Please set it in your .env file.")
+
+client = OpenAI(api_key=API_KEY)
+
+#Initializing pyttsx3
 listening = True
 engine = pyttsx3.init("dummy")
 
 #Set your openai api key and customizing the chatgpt role
-openai.api_key = os.getenv("OPENAI_KEY")
-messages = [{"role": "system", "content": "Your name is Coco and give answers in 2 lines"}]
+messages = [{"role": "system", "content": "Your name is Tom and you can talk to me like a friend, help me find answers when I need and give answer in 2 lines"}]
 
 #Customizing The output voice
 voices = engine.getProperty("voices")
 rate = engine.getProperty("rate")
 volume = engine.getProperty("volume")
+engine.setProperty("rate", 120)
+engine.setProperty("volume", volume)
+engine.setProperty("voice", "alex")
 
 
 def get_response(user_input):
     messages.append({"role": "user", "content": user_input})
-    response = openai.ChatCompletion.create(
-        model = "gpt-4",
-        messages = messages
-    )
-    ChatGPT_reply = response["choices"][0]["message"]["content"]
-    messages.append({"role": "assistant", "content": ChatGPT_reply})
-    return ChatGPT_reply
+    try:
+        response = client.chat.completions.create(
+            model = "gpt-3.5-turbo",
+            messages = messages,
+            max_tokens = 150
+        )
+        ChatGPT_reply = response.choices[0].message.content
+        messages.append({"role": "assistant", "content": ChatGPT_reply})
+        return ChatGPT_reply
+    except Exception as e:
+        print(f"Error calling OpenAI API: {e}")
+        return "I'm sorry, I can't process your request right now."
 
 
 while listening:
@@ -42,15 +56,13 @@ while listening:
             response = recognizer.recognize_google(audio)
             print(response)
 
-            if "coco" in response.lower():
-
+            if "tom" in response.lower():
                 response_from_openai = get_response(response)
-                engine.setProperty("rate", 120)
-                engine.setProperty("volume", volume)
-                engine.setProperty("voice", "alex")
                 engine.say(response_from_openai)
                 engine.runAndWait()
             else:
-                print("Didn't recognize 'Coco'.")
+                print("Didn't recognize 'Tom'.")
         except sr.UnknownValueError:
             print("Didn't recognize anything.")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
