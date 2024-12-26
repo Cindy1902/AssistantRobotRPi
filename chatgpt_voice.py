@@ -1,5 +1,7 @@
 import os
-import openai
+from openai import OpenAI
+
+client = OpenAI(api_key="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")
 import time
 import speech_recognition as sr
 import pyttsx3
@@ -9,7 +11,6 @@ import numpy as np
 from gtts import gTTS
 
 # Load API Key và cấu hình
-openai.api_key = "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"
 model = "gpt-4"
 
 # Đường dẫn đến mô hình Vosk
@@ -35,7 +36,7 @@ language = "en"
 def speak(text):
     tts_engine.say(text)
     tts_engine.runAndWait()
-    
+
 # Hàm lắng nghe âm thanh qua Vosk
 def recognize_from_microphone():
     p = pyaudio.PyAudio()
@@ -75,9 +76,7 @@ def listen_and_respond():
         print(f"You said: {command}")
         # Gửi yêu cầu tới OpenAI
         try:
-            response = openai.ChatCompletion.create(
-                model=model, messages=[{"role": "user", "content": command}], max_tokens=150
-            )
+            response = client.chat.completions.create(model=model, messages=[{"role": "user", "content": command}], max_tokens=150)
             response_text = response.choices[0].message.content.strip()
             print(f"Assistant: {response_text}")
             speak(response_text)

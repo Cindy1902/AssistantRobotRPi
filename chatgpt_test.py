@@ -1,112 +1,88 @@
 import os
 import openai
-import json
-import pyaudio
+from dotenv import load_dotenv
 import time
-from vosk import Model, KaldiRecognizer
+import speech_recognition as sr
+import pyttsx3
+import numpy as np
 from gtts import gTTS
 import subprocess
-import numpy as np
+mytext = 'Welcome to me'
+language = 'vi-VN'
+# from os.path import join, dirname
+# import matplotlib.pyplot as plt
+# ^ matplotlib is great for visualising data and for testing purposes but usually not needed for production
+openai.api_key='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'
+load_dotenv()
+model = 'gpt-4'
+# Set up the speech recognition and text-to-speech engines
+r = sr.Recognizer()
+engine = pyttsx3.init("dummy")
+voice = engine.getProperty('voices')[1]
+engine.setProperty('voice', voice.id)
+name = "YOUR NAME HERE"
+greetings = [f"whats up master {name}",
+             "yeah?",
+             "Well, hello there, Master of Puns and Jokes - how's it going today?",
+             f"Ahoy there, Captain {name}! How's the ship sailing?",
+             f"Bonjour, Monsieur {name}! Comment ça va? Wait, why the hell am I speaking French?" ]
 
-# Cấu hình API Key
-openai.api_key = "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"
-model = "gpt-4"
+# Listen for the wake word "hey pos"
+def listen_for_wake_word(source):
+    print("Listening for 'Hey'...")
 
-# Đường dẫn đến mô hình Vosk
-vosk_model_path = "/home/levi/Downloads/vosk-model-small-en-us-0.15"
-if not os.path.exists(vosk_model_path):
-    raise FileNotFoundError(f"Vosk model not found at {vosk_model_path}")
-
-# Khởi tạo mô hình Vosk
-vosk_model = Model(vosk_model_path)
-recognizer = KaldiRecognizer(vosk_model, 16000)
-
-# Cấu hình trợ lý
-name = "Cindy"
-greetings = [f"What's up {name}", "Yeah?", "Hello there, how's it going today?"]
-wake_word = "hey"
-
-# Hàm phát âm thanh
-def play_audio(file_path):
-    """Phát âm thanh từ file."""
-    try:
-        subprocess.run(["cvlc", "--play-and-exit", file_path], check=True)
-    except Exception as e:
-        print(f"Error playing audio: {e}")
-
-def speak(text):
-    """Chuyển văn bản thành giọng nói và phát âm."""
-    tts = gTTS(text=text, lang="en")
-    file_path = "response.mp3"
-    tts.save(file_path)
-    play_audio(file_path)
-
-# Hàm nhận diện giọng nói từ microphone
-def recognize_from_microphone():
-    """Lắng nghe và nhận diện giọng nói."""
-    p = pyaudio.PyAudio()
-    stream = None
-    try:
-        stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=8192)
-        stream.start_stream()
-
-        print("Listening...")
-        while True:
-            data = stream.read(4096, exception_on_overflow=False)
-            if recognizer.AcceptWaveform(data):
-                result = json.loads(recognizer.Result())
-                text = result.get("text", "")
-                if text:
-                    print(f"Recognized: {text}")
-                    return text
-    except Exception as e:
-        print(f"Audio input error: {e}")
-    finally:
-        if stream is not None:
-            stream.stop_stream()
-            stream.close()
-        p.terminate()
-
-
-# Hàm phát hiện từ wake word
-def listen_for_wake_word():
-    """Lắng nghe từ wake word."""
     while True:
-        recognized_text = recognize_from_microphone()
-        if recognized_text and wake_word in recognized_text.lower():
-            print("Wake word detected!")
-            play_greeting()
-            listen_and_respond()
-
-# Phát lời chào
-def play_greeting():
-    """Phát lời chào."""
-    greeting = np.random.choice(greetings)
-    print(f"Assistant: {greeting}")
-    speak(greeting)
-
-# Lắng nghe và phản hồi
-def listen_and_respond():
-    """Xử lý yêu cầu từ người dùng và phản hồi."""
-    print("Listening for command...")
-    command = recognize_from_microphone()
-    if command:
-        print(f"You said: {command}")
+        audio = r.listen(source)
         try:
-            # Gửi yêu cầu tới OpenAI
-            response = openai.ChatCompletion.create(
-                model=model, messages=[{"role": "user", "content": command}], max_tokens=150
-            )
-            response_text = response.choices[0].message.content.strip()
-            print(f"Assistant: {response_text}")
-            speak(response_text)
-        except Exception as e:
-            print(f"Error with OpenAI API: {e}")
-            speak("Sorry, I couldn't process your request.")
+            text = r.recognize_google(audio)
+            if "hey" in text.lower():
+                print("Wake word detected.")
+                engine.say(np.random.choice(greetings))
+                engine.runAndWait()
+                listen_and_respond(source)
+                break
+        except sr.UnknownValueError:
+            pass
+# Listen for input and respond with OpenAI API
+def listen_and_respond(source):
+    print("Listening...")
 
-# Chương trình chính
-if __name__ == "__main__":
-    try:
-        listen_for_wake_word()
-    except KeyboardInterrupt:
-        print("\nExiting program.")
+    while True:
+        audio = r.listen(source)
+        try:
+            text = r.recognize_google(audio, language=language)
+            print(f"You said: {text}")
+            if not text:
+                continue
+
+            # Send input to OpenAI API
+            response = openai.ChatCompletion.create(model=model, messages=[{"role": "user", "content": f"{text}"}])
+            response_text = response.choices[0].message.content
+            print(response_text)
+            #myobj = gTTS(text = response_text, lang = language, slow = False)
+            #myobj.save("test.wav")
+            #os.system("aplay test.wav")
+            # Speak the response
+            print("speaking")
+            os.system("espeak ' "+response_text + "'")
+            engine.say(response_text)
+            engine.runAndWait()
+
+            if not audio:
+                listen_for_wake_word(source)
+        except sr.UnknownValueError:
+            time.sleep(2)
+            print("Silence found, shutting up, listening...")
+            listen_for_wake_word(source)
+            break
+
+        except sr.RequestError as e:
+            print(f"Could not request results; {e}")
+            engine.say(f"Could not request results; {e}")
+            engine.runAndWait()
+            listen_for_wake_word(source)
+            break
+
+# Use the default microphone as the audio source
+with sr.Microphone() as source:
+    listen_for_wake_word(source)
