@@ -1,13 +1,16 @@
 import speech_recognition as sr
 import pyttsx3
 import openai
+from dotenv import load_dotenv
+import os
 
 #Initializing pyttsx3
+load_dotenv()
 listening = True
 engine = pyttsx3.init("dummy")
 
 #Set your openai api key and customizing the chatgpt role
-openai.api_key = "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"
+openai.api_key = os.getenv("OPENAI_KEY")
 messages = [{"role": "system", "content": "Your name is Coco and give answers in 2 lines"}]
 
 #Customizing The output voice
