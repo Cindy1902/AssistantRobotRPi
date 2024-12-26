@@ -1,7 +1,9 @@
 import os
+from dotenv import load_dotenv
 from openai import OpenAI
 
-client = OpenAI(api_key="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")
+KEY = os.getenv("OPENAI_KEY")
+client = OpenAI(api_key=KEY)
 import time
 import speech_recognition as sr
 import pyttsx3

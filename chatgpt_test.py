@@ -7,13 +7,15 @@ import pyttsx3
 import numpy as np
 from gtts import gTTS
 import subprocess
+from dotenv import load_dotenv
+import os
 mytext = 'Welcome to me'
 language = 'vi-VN'
 # from os.path import join, dirname
 # import matplotlib.pyplot as plt
 # ^ matplotlib is great for visualising data and for testing purposes but usually not needed for production
-openai.api_key='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'
 load_dotenv()
+openai.api_key=os.getenv("OPENAI_KEY")
 model = 'gpt-4'
 # Set up the speech recognition and text-to-speech engines
 r = sr.Recognizer()
