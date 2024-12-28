@@ -2,3 +2,4 @@ __pycache__/
 faceData/*
 *.jpg
 .env
+credentials.json
