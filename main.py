@@ -3,129 +3,80 @@ import pyttsx3
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+import datetime
+import threading
+from queue import Queue
 from time import sleep
-from datetime import datetime
 
-# Import các module tùy chỉnh
-from time_utils import TimerUtils
+# Import custom modules
 from face_rec import FaceTrainingSystem
+from pomodoro import start_pomodoro
 from scheduler import GoogleCalendarScheduler
+from time_utils import TimerUtils
 
-class VoiceControlBot:
+# Initialize OpenAI
+load_dotenv()
+API_KEY = os.getenv("OPENAI_KEY")
+if not API_KEY:
+    raise ValueError("API Key not found. Please set it in your .env file.")
+
+client = OpenAI(api_key=API_KEY)
+
+class RobotAssistant:
     def __init__(self):
-        # Khởi tạo speech recognition
-        self.recognizer = sr.Recognizer()
-        
-        # Khởi tạo text-to-speech
+        # Initialize Text-to-Speech
         self.engine = pyttsx3.init()
         self.engine.setProperty("rate", 120)
         self.engine.setProperty("voice", "alex")
         
-        # Khởi tạo các module
-        self.timer = TimerUtils()
+        # Initialize Speech Recognition
+        self.recognizer = sr.Recognizer()
+        self.microphone = sr.Microphone()
+        
+        # Initialize subsystems
         self.face_system = FaceTrainingSystem()
-        self.scheduler = AppointmentScheduler()
+        self.calendar = GoogleCalendarScheduler()
+        self.timer = TimerUtils()
         
-        # Khởi tạo OpenAI (cho chatbot)
-        load_dotenv()
-        self.api_key = os.getenv("OPENAI_KEY")
-        if self.api_key:
-            self.openai_client = OpenAI(api_key=self.api_key)
-            self.messages = [{"role": "system", "content": "Your name is Tom and you can talk to me like a friend"}]
+        # Initialize ChatGPT context
+        self.messages = [
+            {"role": "system", "content": "You are a helpful robot assistant named Tom. Keep responses brief and clear."}
+        ]
         
-        # Định nghĩa các từ khóa và chức năng tương ứng
-        self.commands = {
-            "timer": self.handle_timer,
-            "countdown": self.handle_countdown,
-            "time": self.handle_world_time,
-            "face": self.handle_face_recognition,
-            "schedule": self.handle_scheduler,
-            "chat": self.handle_chat
-        }
+        # Control flags
+        self.is_running = True
+        self.current_mode = None
+        
+        # Start face recognition in a separate thread
+        self.face_thread = threading.Thread(target=self.run_face_recognition)
+        self.face_thread.daemon = True
+        self.face_thread.start()
 
     def speak(self, text):
-        """Chuyển văn bản thành giọng nói"""
-        print(f"Bot: {text}")
+        """Text-to-speech output"""
         self.engine.say(text)
         self.engine.runAndWait()
 
     def listen(self):
-        """Lắng nghe và nhận dạng giọng nói"""
-        with sr.Microphone() as source:
-            print("Đang lắng nghe...")
+        """Listen for voice commands"""
+        with self.microphone as source:
+            print("Listening...")
             self.recognizer.adjust_for_ambient_noise(source)
             try:
                 audio = self.recognizer.listen(source, timeout=5.0)
-                text = self.recognizer.recognize_google(audio, language='vi-VN')
-                print(f"Bạn: {text}")
+                text = self.recognizer.recognize_google(audio)
                 return text.lower()
             except sr.UnknownValueError:
-                print("Không nhận dạng được giọng nói")
-                return None
+                return ""
             except sr.RequestError:
-                print("Lỗi kết nối")
-                return None
+                self.speak("Sorry, there was an error with the speech recognition service.")
+                return ""
 
-    def handle_timer(self, command):
-        """Xử lý lệnh hẹn giờ"""
-        self.speak("Bạn muốn đặt hẹn giờ cho mấy giờ? (Format: HH:MM:SS)")
-        time_str = self.listen()
-        if time_str:
-            self.timer.precise_timer(time_str)
-            self.speak(f"Đã đặt hẹn giờ cho {time_str}")
-
-    def handle_countdown(self, command):
-        """Xử lý lệnh đếm ngược"""
-        self.speak("Bạn muốn đếm ngược bao nhiêu giây?")
-        try:
-            seconds = int(self.listen())
-            self.timer.countdown(seconds)
-            self.speak("Bắt đầu đếm ngược")
-        except:
-            self.speak("Không hiểu được thời gian đếm ngược")
-
-    def handle_world_time(self, command):
-        """Xử lý lệnh xem giờ quốc tế"""
-        self.speak("Bạn muốn xem giờ của khu vực nào?")
-        timezone = self.listen()
-        if timezone:
-            time = self.timer.get_world_time(timezone)
-            self.speak(f"Thời gian ở {timezone} là {time}")
-
-    def handle_face_recognition(self, command):
-        """Xử lý nhận diện khuôn mặt"""
-        self.speak("Khởi động hệ thống nhận diện khuôn mặt")
-        self.face_system.run()
-
-    def handle_scheduler(self, command):
-        """Xử lý lịch hẹn"""
-        self.speak("Bạn muốn thêm lịch hẹn mới không?")
-        if "có" in self.listen():
-            self.speak("Tên lịch hẹn là gì?")
-            title = self.listen()
-            self.speak("Thời gian hẹn là khi nào? (Format: DD/MM/YYYY HH:MM)")
-            date_str = self.listen()
-            try:
-                date_time = datetime.strptime(date_str, "%d/%m/%Y %H:%M")
-                self.scheduler.add_appointment(title, date_time)
-                self.speak("Đã thêm lịch hẹn thành công")
-            except:
-                self.speak("Không hiểu được định dạng thời gian")
-
-    def handle_chat(self, command):
-        """Xử lý trò chuyện với ChatGPT"""
-        if not self.api_key:
-            self.speak("Chưa cấu hình API key cho ChatGPT")
-            return
-            
-        response = self.get_chat_response(command)
-        self.speak(response)
-
-    def get_chat_response(self, user_input):
-        """Lấy phản hồi từ ChatGPT"""
+    def get_gpt_response(self, user_input):
+        """Get response from ChatGPT"""
         self.messages.append({"role": "user", "content": user_input})
         try:
-            response = self.openai_client.chat.completions.create(
+            response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=self.messages,
                 max_tokens=150
@@ -134,24 +85,82 @@ class VoiceControlBot:
             self.messages.append({"role": "assistant", "content": reply})
             return reply
         except Exception as e:
-            print(f"Lỗi API OpenAI: {e}")
-            return "Xin lỗi, tôi không thể xử lý yêu cầu lúc này"
+            print(f"Error calling OpenAI API: {e}")
+            return "I'm sorry, I encountered an error processing your request."
+
+    def run_face_recognition(self):
+        """Run face recognition in background"""
+        while self.is_running:
+            if self.current_mode == "face_recognition":
+                self.face_system.run()
+            sleep(0.1)
+
+    def handle_command(self, command):
+        """Process voice commands"""
+        if "tom" not in command:
+            return
+
+        if "schedule" in command or "appointment" in command:
+            self.speak("What would you like to schedule?")
+            event_details = self.listen()
+            try:
+                # Simple date parsing - enhance as needed
+                title = event_details.split("on")[0].strip()
+                date_str = event_details.split("on")[1].strip()
+                date_time = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M")
+                
+                if self.calendar.add_appointment(title, date_time):
+                    self.speak("Event scheduled successfully")
+                else:
+                    self.speak("Sorry, I couldn't schedule the event")
+            except Exception as e:
+                self.speak("I couldn't understand the date format. Please use YYYY-MM-DD HH:MM format")
+
+        elif "pomodoro" in command:
+            self.speak("Starting a Pomodoro session with 25 minutes work and 5 minutes break")
+            start_pomodoro(25, 5)
+
+        elif "face recognition" in command:
+            self.speak("Starting face recognition system")
+            self.current_mode = "face_recognition"
+
+        elif "timer" in command:
+            if "countdown" in command:
+                try:
+                    minutes = int(''.join(filter(str.isdigit, command)))
+                    self.speak(f"Starting {minutes} minute countdown")
+                    self.timer.countdown(minutes * 60)
+                except ValueError:
+                    self.speak("Please specify the number of minutes")
+            elif "set" in command:
+                self.speak("What time should I set the timer for? Use HH:MM:SS format")
+                time_str = self.listen()
+                self.timer.precise_timer(time_str)
+
+        elif "world time" in command:
+            if "london" in command:
+                time = self.timer.get_world_time("Europe/London")
+                self.speak(f"The time in London is {time}")
+            # Add more cities as needed
+
+        else:
+            # Default to ChatGPT response
+            response = self.get_gpt_response(command)
+            self.speak(response)
 
     def run(self):
-        """Chạy bot"""
-        self.speak("Xin chào! Tôi là trợ lý ảo của bạn")
+        """Main run loop"""
+        self.speak("Hello, I'm Tom, your robot assistant. How can I help you?")
         
-        while True:
+        while self.is_running:
             command = self.listen()
             if command:
-                # Kiểm tra từ khóa trong câu lệnh
-                for keyword, handler in self.commands.items():
-                    if keyword in command:
-                        handler(command)
-                        break
-                else:
-                    self.speak("Tôi không hiểu lệnh này")
+                self.handle_command(command)
+                
+            if "goodbye" in command or "bye" in command:
+                self.speak("Goodbye! Have a great day!")
+                self.is_running = False
 
 if __name__ == "__main__":
-    bot = VoiceControlBot()
-    bot.run()
+    assistant = RobotAssistant()
+    assistant.run()
